@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volume Engine v12.87.9</title>
+
+<style>
+body{
+    margin:0;
+    background:#0f0f0f;
+    font-family:Arial, sans-serif;
+    color:white;
+    text-align:center;
+}
+.container{
+    max-width:600px;
+    margin:auto;
+    padding:20px;
+}
+h1{
+    color:#00ffc3;
+}
+.control{
+    margin:20px 0;
+}
+input[type=range]{
+    width:100%;
+}
+button{
+    padding:10px 20px;
+    margin:10px;
+    background:#00ffc3;
+    border:none;
+    font-weight:bold;
+    cursor:pointer;
+}
+canvas{
+    width:100%;
+    height:150px;
+    background:black;
+    margin-top:20px;
+    border-radius:8px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+<h1>Volume Engine v12.87.9</h1>
+
+<input type="file" id="audioFile" accept="audio/*">
+<div>
+    <button id="playBtn">Phát</button>
+    <button id="stopBtn">Dừng</button>
+</div>
+
+<div class="control">
+<label>Master Boost: <span id="gainVal">1</span>x</label>
+<input type="range" id="gain" min="1" max="40" step="0.5" value="1">
+</div>
+
+<div class="control">
+<label>Bass Boost: <span id="bassVal">0</span> dB</label>
+<input type="range" id="bass" min="0" max="20" step="1" value="0">
+</div>
+
+<div class="control">
+<label>Treble Boost: <span id="trebleVal">0</span> dB</label>
+<input type="range" id="treble" min="0" max="20" step="1" value="0">
+</div>
+
+<canvas id="visualizer"></canvas>
+</div>
+
+<script>
+let audioCtx;
+let source;
+let gainNode;
+let bassFilter;
+let trebleFilter;
+let compressor;
+let analyser;
+let dataArray;
+let audio = new Audio();
+
+const fileInput = document.getElementById("audioFile");
+const playBtn = document.getElementById("playBtn");
+const stopBtn = document.getElementById("stopBtn");
+const gainSlider = document.getElementById("gain");
+const bassSlider = document.getElementById("bass");
+const trebleSlider = document.getElementById("treble");
+const canvas = document.getElementById("visualizer");
+const ctxCanvas = canvas.getContext("2d");
+
+canvas.width = 600;
+canvas.height = 150;
+
+function initAudio(){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    gainNode = audioCtx.createGain();
+
+    bassFilter = audioCtx.createBiquadFilter();
+    bassFilter.type = "lowshelf";
+    bassFilter.frequency.value = 120;
+
+    trebleFilter = audioCtx.createBiquadFilter();
+    trebleFilter.type = "highshelf";
+    trebleFilter.frequency.value = 6000;
+
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -12;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0;
+    compressor.release.value = 0.2;
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+
+    const bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+
+    source = audioCtx.createMediaElementSource(audio);
+
+    source.connect(bassFilter);
+    bassFilter.connect(trebleFilter);
+    trebleFilter.connect(gainNode);
+    gainNode.connect(compressor);
+    compressor.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    visualize();
+}
+
+function visualize(){
+    requestAnimationFrame(visualize);
+    analyser.getByteFrequencyData(dataArray);
+
+    ctxCanvas.fillStyle = "black";
+    ctxCanvas.fillRect(0, 0, canvas.width, canvas.height);
+
+    let barWidth = (canvas.width / dataArray.length) * 2;
+    let x = 0;
+
+    for(let i=0; i<dataArray.length; i++){
+        let barHeight = dataArray[i];
+        ctxCanvas.fillStyle = "lime";
+        ctxCanvas.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        x += barWidth + 1;
+    }
+}
+
+fileInput.addEventListener("change", e=>{
+    audio.src = URL.createObjectURL(e.target.files[0]);
+});
+
+playBtn.addEventListener("click", ()=>{
+    if(!audioCtx) initAudio();
+    audio.play();
+});
+
+stopBtn.addEventListener("click", ()=>{
+    audio.pause();
+    audio.currentTime = 0;
+});
+
+gainSlider.addEventListener("input", function(){
+    document.getElementById("gainVal").innerText = this.value;
+    if(gainNode) gainNode.gain.value = this.value;
+});
+
+bassSlider.addEventListener("input", function(){
+    document.getElementById("bassVal").innerText = this.value;
+    if(bassFilter) bassFilter.gain.value = this.value;
+});
+
+trebleSlider.addEventListener("input", function(){
+    document.getElementById("trebleVal").innerText = this.value;
+    if(trebleFilter) trebleFilter.gain.value = this.value;
+});
+</script>
+
+</body>
+</html>
